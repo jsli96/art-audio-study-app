@@ -32,6 +32,32 @@ async function fetchToDataUrl(path: string): Promise<string> {
   return blobToDataUrl(blob);
 }
 
+function escapeXml(s: string) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function makeSsmlTemplate(text: string, voiceName: string, lang: string) {
+  const safe = escapeXml(text || "Your text here...");
+  return `<?xml version="1.0" encoding="utf-8"?>
+<speak version="1.0"
+  xmlns="http://www.w3.org/2001/10/synthesis"
+  xmlns:mstts="https://www.w3.org/2001/mstts"
+  xml:lang="${lang}">
+  <voice name="${voiceName}">
+    <!-- Example word-level emphasis:
+         This is <emphasis level="moderate">important</emphasis>. -->
+    <!-- Example prosody on a phrase:
+         <prosody pitch="+20%" rate="+10%">exciting phrase</prosody> -->
+    ${safe}
+  </voice>
+</speak>`;
+}
+
 export default function Page() {
   const [participantId, setParticipantId] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -45,6 +71,10 @@ export default function Page() {
   const [describeOut, setDescribeOut] = useState<DescribeOut | null>(null);
 
   const [emotionPreset, setEmotionPreset] = useState<"neutral"|"warm"|"excited"|"somber"|"mysterious">("warm");
+// Section 2 (Azure SSML)
+const [useCustomSsml, setUseCustomSsml] = useState(false);
+const [azureVoiceName, setAzureVoiceName] = useState("en-US-JaneNeural");
+const [ssmlText, setSsmlText] = useState("");
 
   // Responses
   const [ratingStyleComprehension, setRatingStyleComprehension] = useState<number | undefined>();
@@ -103,6 +133,11 @@ export default function Page() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setDescribeOut(data);
+
+      // Prefill SSML template once (only if empty) to help you start editing.
+      if (!ssmlText.trim()) {
+        setSsmlText(makeSsmlTemplate(data.description, azureVoiceName, "en-US"));
+      }
     } catch (e: any) {
       console.error(e);
       alert(e?.message ?? "Failed to generate description");
@@ -270,26 +305,69 @@ export default function Page() {
       <div className="grid">
         <AudioPlayer title="1) Baseline system TTS" descriptionText={descriptionText} mode="tts" />
         <AudioPlayer
-          title="2) Emotional Intonation"
+          title="2) Emotional Intonation (Azure SSML)"
           descriptionText={descriptionText}
           mode="emotion"
           emotionPreset={emotionPreset}
+          useAzureForEmotion={true}
+          azureVoiceName={azureVoiceName}
+          ssmlOverride={useCustomSsml ? ssmlText : undefined}
           headerExtra={
-            <div style={{ display: "grid", gap: 6 }}>
-              <label>Emotion selection</label>
-              <select value={emotionPreset} onChange={(e) => setEmotionPreset(e.target.value as any)}>
-                <option value="neutral">neutral</option>
-                <option value="warm">warm</option>
-                <option value="excited">excited</option>
-                <option value="somber">somber</option>
-                <option value="mysterious">mysterious</option>
-              </select>
-              <div className="small">
-                This preset controls both the Emotional Intonation in this section.
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <label>Emotion selection</label>
+                <select value={emotionPreset} onChange={(e) => setEmotionPreset(e.target.value as any)}>
+                  <option value="neutral">neutral</option>
+                  <option value="warm">warm</option>
+                  <option value="excited">excited</option>
+                  <option value="somber">somber</option>
+                  <option value="mysterious">mysterious</option>
+                </select>
+                <div className="small">
+                  Used to set default <code>&lt;prosody&gt;</code> when you are not overriding with custom SSML.
+                </div>
               </div>
+
+              <div style={{ display: "grid", gap: 6 }}>
+                <label>Azure voice name</label>
+                <input value={azureVoiceName} onChange={(e) => setAzureVoiceName(e.target.value)} placeholder="e.g., en-US-JaneNeural" />
+                <div className="small">
+                  Tip: some Azure voices have better support for word-level <code>&lt;emphasis&gt;</code>.
+                </div>
+              </div>
+
+              <div className="row">
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={useCustomSsml} onChange={(e) => setUseCustomSsml(e.target.checked)} />
+                  Use custom SSML
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => setSsmlText(makeSsmlTemplate(descriptionText, azureVoiceName, "en-US"))}
+                  disabled={!descriptionText}
+                >
+                  Fill SSML from description
+                </button>
+              </div>
+
+              {useCustomSsml && (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label>SSML</label>
+                  <textarea
+                    rows={10}
+                    value={ssmlText}
+                    onChange={(e) => setSsmlText(e.target.value)}
+                    placeholder="Paste full SSML <speak>...</speak> here."
+                  />
+                  <div className="small">
+                    You can add word-level tags such as <code>&lt;emphasis&gt;</code>, <code>&lt;prosody&gt;</code>, and <code>&lt;break /&gt;</code>.
+                  </div>
+                </div>
+              )}
             </div>
           }
-        />
+/>
         <AudioPlayer title="3) Intonation + Music" descriptionText={descriptionText} mode="emotion_music" emotionPreset={emotionPreset} />
       </div>
 

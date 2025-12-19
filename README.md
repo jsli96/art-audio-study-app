@@ -47,3 +47,21 @@ Open http://localhost:3000
 - Object storage (S3/R2) for uploaded images and generated audio (optional)
 
 See the design notes in the chat for the next upgrade steps.
+
+
+## Azure Speech (SSML) for Condition 2
+
+Condition 2 can use Azure Text-to-Speech via SSML to allow word-/phrase-level prosody control.
+
+### Environment variables
+
+Add to `.env.local`:
+
+- `SPEECH_KEY`
+- `SPEECH_REGION` (e.g., `eastus`)
+
+### Implementation
+
+- API: `src/app/api/azure-tts/route.ts`
+- UI: `src/app/page.tsx`
+- Player: `src/components/AudioPlayer.tsx`

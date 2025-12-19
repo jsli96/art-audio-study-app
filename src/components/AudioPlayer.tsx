@@ -8,9 +8,14 @@ type Props = {
   mode: "tts" | "emotion" | "emotion_music";
   emotionPreset?: "neutral" | "warm" | "excited" | "somber" | "mysterious";
   headerExtra?: React.ReactNode;
+
+  // Section 2: Azure SSML
+  useAzureForEmotion?: boolean; // default true
+  ssmlOverride?: string; // full SSML document (optional)
+  azureVoiceName?: string; // e.g., en-US-JaneNeural
 };
 
-export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neutral", headerExtra }: Props) {
+export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neutral", headerExtra, useAzureForEmotion = true, ssmlOverride, azureVoiceName }: Props) {
   const [loading, setLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -21,23 +26,44 @@ export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neu
   const musicNodesRef = useRef<{ osc: OscillatorNode; gain: GainNode }[] | null>(null);
 
   async function generateAIVoice() {
-    setLoading(true);
-    setAudioUrl(null);
-    try {
-      const res = await fetch("/api/speech", {
+  setLoading(true);
+  setAudioUrl(null);
+  try {
+    // Section 2: Emotional intonation via Azure SSML
+    if (mode === "emotion" && useAzureForEmotion) {
+      const res = await fetch("/api/azure-tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: descriptionText, mode, emotionPreset })
+        headers: {
+          "Content-Type": "application/json",
+          "x-emotion-preset": emotionPreset
+        },
+        body: JSON.stringify({
+          text: descriptionText,
+          ssml: ssmlOverride?.trim() ? ssmlOverride : undefined,
+          voiceName: azureVoiceName
+        })
       });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setAudioUrl(url);
-    } finally {
-      setLoading(false);
+      return;
     }
-  }
 
+    // Default: OpenAI TTS route (used by Section 3; optionally also by Section 2 if you disable Azure)
+    const res = await fetch("/api/speech", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: descriptionText, mode, emotionPreset })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    setAudioUrl(url);
+  } finally {
+    setLoading(false);
+  }
+}
   function stopMusic() {
     if (musicNodesRef.current) {
       for (const n of musicNodesRef.current) {
@@ -98,9 +124,9 @@ export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neu
 
   const subtitle = useMemo(() => {
     if (mode === "tts") return "Baseline system TTS (browser/OS default voice).";
-    if (mode === "emotion") return `Emotional intonation preset: ${emotionPreset}.`;
+    if (mode === "emotion") return useAzureForEmotion ? `Azure SSML (word-level prosody possible). Preset: ${emotionPreset}.` : `Emotional intonation preset: ${emotionPreset}.`;
     return "Emotional intonation + background music (placeholder music bed in MVP).";
-  }, [mode, emotionPreset]);
+  }, [mode, emotionPreset, useAzureForEmotion]);
 
   function speakSystemTTS() {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -243,9 +269,9 @@ export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neu
 
 //   const subtitle = useMemo(() => {
 //     if (mode === "tts") return "Baseline system TTS (browser/OS voice).";
-//     if (mode === "emotion") return `Emotional intonation preset: ${emotionPreset}.`;
+//     if (mode === "emotion") return useAzureForEmotion ? `Azure SSML (word-level prosody possible). Preset: ${emotionPreset}.` : `Emotional intonation preset: ${emotionPreset}.`;
 //     return "Emotional intonation + background music.";
-//   }, [mode, emotionPreset]);
+//   }, [mode, emotionPreset, useAzureForEmotion]);
 
 
 
@@ -336,7 +362,7 @@ export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neu
 //       )}
 
 //       <div className="small" style={{ marginTop: 10 }}>
-//         Disclosure: the voice you hear may be AI-generated (conditions 2/3).
+//         Disclosure: condition 2 uses Azure TTS (SSML) when enabled; condition 3 uses AI-generated audio + music bed placeholder.
 //       </div>
 //     </div>
 //   );
