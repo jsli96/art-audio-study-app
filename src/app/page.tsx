@@ -133,6 +133,85 @@ function buildSsmlFromTextAndMarks(opts: {
 </speak>`;
 }
 
+
+
+
+function renderHighlightedText(text: string, marks: Mark[]) {
+  if (!text) return null;
+
+  // Only span-type marks affect highlighting
+  const spans = marks
+    .filter((m): m is Extract<Mark, { kind: "emphasis" | "prosody" }> => m.kind === "emphasis" || m.kind === "prosody")
+    .slice()
+    .sort((a, b) => a.start - b.start);
+
+  // If overlaps exist, fall back to no highlight to avoid confusing output
+  for (let i = 0; i < spans.length - 1; i++) {
+    if (spans[i].end > spans[i + 1].start) {
+      return <span>{text}</span>;
+    }
+  }
+
+  const parts: React.ReactNode[] = [];
+  let cursor = 0;
+
+  const getStyleFor = (m: Extract<Mark, { kind: "emphasis" | "prosody" }>) => {
+    // Distinct colors by intent (no need to be perfect—just distinguishable)
+    // You can tweak these colors later.
+    if (m.kind === "emphasis") return { background: "#FFF3BF" }; // light yellow
+
+    // prosody — choose based on which attribute is set
+    if (m.pitch) return { background: "#D0EBFF" }; // light blue = pitch
+    if (m.rate) return { background: "#D3F9D8" }; // light green = rate
+    if (m.volume) return { background: "#FFE3E3" }; // light red = volume
+    return { background: "#F1F3F5" };
+  };
+
+  const getLabelFor = (m: Extract<Mark, { kind: "emphasis" | "prosody" }>) => {
+    if (m.kind === "emphasis") return "emphasis";
+    const tags: string[] = [];
+    if (m.pitch) tags.push(`pitch ${m.pitch}`);
+    if (m.rate) tags.push(`rate ${m.rate}`);
+    if (m.volume) tags.push(`vol ${m.volume}`);
+    return tags.join(", ") || "prosody";
+  };
+
+  for (const m of spans) {
+    if (cursor < m.start) {
+      parts.push(<span key={`t-${cursor}`}>{text.slice(cursor, m.start)}</span>);
+    }
+
+    parts.push(
+      <span
+        key={`m-${m.start}-${m.end}`}
+        title={getLabelFor(m)}
+        style={{
+          ...getStyleFor(m),
+          borderRadius: 6,
+          padding: "0 2px",
+          boxDecorationBreak: "clone",
+          WebkitBoxDecorationBreak: "clone",
+        }}
+      >
+        {text.slice(m.start, m.end)}
+      </span>
+    );
+
+    cursor = m.end;
+  }
+
+  if (cursor < text.length) {
+    parts.push(<span key={`t-${cursor}-end`}>{text.slice(cursor)}</span>);
+  }
+
+  return <span style={{ whiteSpace: "pre-wrap" }}>{parts}</span>;
+}
+
+
+
+
+
+
 export default function Page() {
   const [participantId, setParticipantId] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -454,6 +533,8 @@ export default function Page() {
         )}
       </div>
 
+
+
       <div className="grid">
         <AudioPlayer title="1) Baseline system TTS" descriptionText={descriptionText} mode="tts" />
 
@@ -481,7 +562,24 @@ export default function Page() {
               </div>
 
               <div style={{ display: "grid", gap: 6 }}>
-                <label>Intonation editor (plain text)</label>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <label>Intonation editor (plain text)</label>
+
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!descriptionText.trim()}
+                    onClick={() => {
+                      setSsmlBaseText(descriptionText);
+                      setSsmlMarks([]);
+                      // Optional: focus the textarea after reset
+                      setTimeout(() => ssmlTextareaRef.current?.focus(), 0);
+                    }}
+                  >
+                    Fill from description (reset)
+                  </button>
+                </div>
+
                 <textarea
                   ref={ssmlTextareaRef}
                   rows={6}
@@ -492,10 +590,20 @@ export default function Page() {
                   }}
                   placeholder="Click 'Generate description' to populate this box, then select words and apply edits below."
                 />
+
                 <div className="small">
                   Select words, then click an edit button. Editing the text clears formatting to keep indices consistent.
                 </div>
+
+                <div className="small">
+                  Legend: <span style={{ background: "#D0EBFF", padding: "0 4px", borderRadius: 6 }}>pitch</span>{" "}
+                  <span style={{ background: "#D3F9D8", padding: "0 4px", borderRadius: 6 }}>rate</span>{" "}
+                  <span style={{ background: "#FFE3E3", padding: "0 4px", borderRadius: 6 }}>volume</span>{" "}
+                  <span style={{ background: "#FFF3BF", padding: "0 4px", borderRadius: 6 }}>emphasis</span>
+                </div>
+
               </div>
+
 
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
                 <button
@@ -578,6 +686,23 @@ export default function Page() {
                   <div className="small">For researcher debugging only.</div>
                 </div>
               )}
+
+
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }}>
+                    <div className="small" style={{ fontWeight: 700, marginBottom: 6 }}>
+                      Preview with highlights
+                    </div>
+                    <div style={{ lineHeight: 1.6 }}>
+                      {renderHighlightedText(ssmlBaseText || descriptionText, ssmlMarks)}
+                    </div>
+                    {ssmlMarks.length > 0 && (
+                      <div className="small" style={{ marginTop: 8 }}>
+                        Tip: hover highlighted text to see the applied setting.
+                      </div>
+                    )}
+                </div>
+
+              
             </div>
           }
         />
