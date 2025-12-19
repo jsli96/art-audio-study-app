@@ -35,13 +35,12 @@ export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neu
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-emotion-preset": emotionPreset
         },
         body: JSON.stringify({
           text: descriptionText,
           ssml: ssmlOverride?.trim() ? ssmlOverride : undefined,
-          voiceName: azureVoiceName
-        })
+          voiceName: azureVoiceName,
+        })        
       });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
@@ -64,6 +63,7 @@ export function AudioPlayer({ title, descriptionText, mode, emotionPreset = "neu
     setLoading(false);
   }
 }
+
   function stopMusic() {
     if (musicNodesRef.current) {
       for (const n of musicNodesRef.current) {

@@ -72,7 +72,7 @@ export default function Page() {
 
   const [emotionPreset, setEmotionPreset] = useState<"neutral"|"warm"|"excited"|"somber"|"mysterious">("warm");
 // Section 2 (Azure SSML)
-const [useCustomSsml, setUseCustomSsml] = useState(false);
+const [useCustomSsml, setUseCustomSsml] = useState(true);
 const [azureVoiceName, setAzureVoiceName] = useState("en-US-JaneNeural");
 const [ssmlText, setSsmlText] = useState("");
 
@@ -314,20 +314,6 @@ const [ssmlText, setSsmlText] = useState("");
           ssmlOverride={useCustomSsml ? ssmlText : undefined}
           headerExtra={
             <div style={{ display: "grid", gap: 10 }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label>Emotion selection</label>
-                <select value={emotionPreset} onChange={(e) => setEmotionPreset(e.target.value as any)}>
-                  <option value="neutral">neutral</option>
-                  <option value="warm">warm</option>
-                  <option value="excited">excited</option>
-                  <option value="somber">somber</option>
-                  <option value="mysterious">mysterious</option>
-                </select>
-                <div className="small">
-                  Used to set default <code>&lt;prosody&gt;</code> when you are not overriding with custom SSML.
-                </div>
-              </div>
-
               <div style={{ display: "grid", gap: 6 }}>
                 <label>Azure voice name</label>
                 <input value={azureVoiceName} onChange={(e) => setAzureVoiceName(e.target.value)} placeholder="e.g., en-US-JaneNeural" />
