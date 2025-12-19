@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model StudySession {
+  id            String   @id
+  participantId String?
+  createdAt     DateTime @default(now())
+  userAgent     String?
+  locale        String?
+
+  imageSourceType String? // "url" | "upload"
+  imageSource     String? // stored URL or filename (if you later add S3)
+  description     String?
+
+  trials Trial[]
+}
+
+model Trial {
+  id          String   @id
+  sessionId   String
+  session     StudySession @relation(fields: [sessionId], references: [id])
+  createdAt   DateTime @default(now())
+
+  // Condition order for this trial (can randomize later)
+  conditionA  String // "tts"
+  conditionB  String // "emotion"
+  conditionC  String // "emotion+music"
+
+  // Participant responses
+  ratingStyleComprehension Int? // 1-7
+  ratingEmotionalFit       Int? // 1-7
+  ratingEnjoyment          Int? // 1-7
+  freeText                 String?
+}
